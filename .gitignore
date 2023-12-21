@@ -6,3 +6,6 @@ model.pkl
 model/preprocessed_food.csv
 model/preprocessed_disease.csv
 similarity_scores.pkl
+
+disease.pkl
+food.pkl

@@ -1,7 +1,11 @@
 import numpy as np
 import pandas as pd
+import pickle
+
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
+
+
 food_data = pd.read_csv('preprocessed_food.csv')
 disease_data = pd.read_csv('preprocessed_disease.csv')
 selected_disease = input("Enter the disease name: ")
@@ -30,3 +34,8 @@ print("Top Recommended Foods for", selected_disease)
 for i, idx in enumerate(recommended_food_indices):
     food_name = food_data.loc[idx, 'name']
     print(f"{i+1}. {food_name}")
+
+
+pickle.dump(df.open('model.pkl','wb'))
+with open('model.pkl','wb') as model_file:
+    pickle.dump(predicted_distances, model_file)

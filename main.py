@@ -2,7 +2,9 @@ import streamlit as st
 import pickle
 import numpy as np
 import pandas as pd
-
+from algoliasearch.search_client import SearchClient
+from api import fetch_poster, fetch_overview, fetch_trailers, fetch_recommend_posters
+from api import ALGOLIA_APP_ID, ALGOLIA_API_KEY, ALGOLIA_INDEX_NAME
 
 similarity_scores = pickle.load(open('model/similarity_scores.pkl', 'rb'))
 food_data = pickle.load(open('model/food.pkl', 'rb'))
@@ -91,11 +93,50 @@ def display_food_recommendation():
                         color = f'rgb(255, {255 - intensity}, {255 - intensity})' 
                         st.markdown(f"<div style='background-color: {color}; padding: 10px; margin: 5px; border-radius: 5px; color: #ffffff; text-align: center;'>{i}. {food}</div>", unsafe_allow_html=True)
         # Add your code for food recommendation here
+@st.cache
+def search(query):
+    query = request.args.get('query')
+    format = request.args.get('format', 'html')
+
+    if not query:
+        if format == 'json':
+            return jsonify({'error': 'query parameter is required'})
+        else:
+            return render_template('search.html',
+                                   error='query parameter is required')
+
+    results = index.search(query)
+
 
 def display_categorical_food_recommendation():
     st.title("Categorical Food Recommendation")
-    # Add your code for categorical food recommendation here
+    query = st.text_input('Search for food:', '')
 
+    if st.button('Search'):
+        if not query:
+            st.error('Query parameter is required')
+            return
+
+        results = search(query)
+        hits = results['hits']
+
+        # Extract movie IDs from search results
+        #movie_ids = [hit['Name'] for hit in hits]
+
+        
+
+        # Add poster URLs to the search results
+        for hit, Category in zip(hits, Category):
+            hit['Category'] = Category
+
+        # Display search results
+        st.write("Search Results:")
+        for hit in hits:
+            st.write(hit)
+
+            # Display poster if available
+            if 'Category' in hit:
+                st.image(hit['Category'])
 def display_food_to_avoid():
     st.title("Food to Avoid")
     # Add your code for food to avoid here

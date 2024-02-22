@@ -1,100 +1,127 @@
-import streamlit as st
-import pickle
-import numpy as np
-import pandas as pd
+from flask import Flask, render_template, request, url_for
 from algoliasearch.search_client import SearchClient
-from api import fetch_poster, fetch_overview, fetch_trailers, fetch_recommend_posters
-from api import ALGOLIA_APP_ID, ALGOLIA_API_KEY, ALGOLIA_INDEX_NAME
+import requests
+# from math import ceil
+import os
+import pandas as pd
+import pickle
+from dotenv import load_dotenv
+load_dotenv()
 
-similarity_scores = pickle.load(open('model/similarity_scores.pkl', 'rb'))
-food_data = pickle.load(open('model/food.pkl', 'rb'))
-disease_data = pickle.load(open('model/disease.pkl', 'rb'))
+# Access environment variables
+ALGOLIA_INDEX_NAME= os.getenv("ALGOLIA_INDEX_NAME")
+ALGOLIA_API_KEY= os.getenv("ALGOLIA_API_KEY")
+ALGOLIA_APP_ID = os.getenv("ALGOLIA_APP_ID")
 
+app = Flask(__name__)
 
-custom_css = """
-    body {
-        color: #262730;
-        background-color: #f7f7f7;
-        font-family: 'Arial', sans-serif;
-    }
-    .stButton>button {
-        background-color: #2ecc71;
-        color: #ffffff;
-        border-radius: 5px;
-    }
-    .sidebar .sidebar-content {
-        background-color: #34495e;
-        color: #ffffff;
-        border-radius: 5px;
-        margin-top: 10px;
-    }
-    .sidebar .sidebar-content .stButton>button {
-        background-color: #3498db;
-        border-radius: 5px;
-    }
-    .stSelectbox {
-        background-color: #3498db;
-        color: #ffffff;
-    }
-    .stTable {
-        background-color: #ffffff;
-    }
-    .stTable th, .stTable td {
-        border: 1px solid #dddddd;
-    }
-    .stTable thead th {
-        background-color: #2c3e50;
-        color: #ffffff;
-    }
-"""
+# Static location config
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+app.config['UPLOAD_FOLDER'] = 'static'
+app.secret_key = 'secret'
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['UPLOAD_FOLDER'] = 'static'
+
+# Load preprocessed data
+food_df = pd.read_csv('model/datasets/preprocessed_food.csv')
+
+# Define list of diseases
+diseases = ["AcidReflux", "Anemia", "Cavities", "FattyLiver", "Gastritis",
+            "Obesity", "Pancreatitis", "Type1Diabetes", "Urinary-tract",
+            "Hypertension", "Low Blood Pressure", "Kidney Stone",
+            "coronary artery disease", "bronchitis", "asthma",
+            "common cold", "influenza", "corona virus", "diarrhoea", "cholera"]
+
+# Dictionary with disease names as keys and indices values
+disease_dict = {disease: i for i, disease in enumerate(diseases)}
+
+""" Setting Template """
+@app.route('/')
+def home():
+    return render_template('home.html' )
 
 
-st.sidebar.title('Food Recommendation System')
-st.markdown(f'<style>{custom_css}</style>', unsafe_allow_html=True)
+@app.route('/recommend', methods=['POST','GET'])
+def recommend():
+    if request.method == 'GET':
+        return render_template('food_recommend.html', diseases=diseases)
+    elif request.method == 'POST':
+        selected_disease = request.form.get('disease')
+        print("Form Data:", request.form)  # Print form data for debugging
+        print("Selected Disease:", selected_disease)  # Print selected disease
+        disease_index = disease_dict.get(selected_disease)
+        if disease_index is None:
+            return "Invalid disease selected."  # Handle case where disease is not found
 
-# Define function to display different pages
-def display_food_recommendation():
-    st.title("Food Recommendation")
-    selected_diseases = st.multiselect('Select Disease(s):', ["AcidReflux","Anemia","Cavities","FattyLiver","Gastritis""Obesity","Pancreatitis","Type1Diabetes","Urinary-tract","Hypertension","Low Blood Pressure","Kidney Stone","coronary artery disease","Bronchitis","Asthma","Common Cold","Influenza","Coronavirus","Diarrhea","Cholera"], default=['AcidReflux'])
-    st.subheader('Selected Diseases:')
-    for disease in selected_diseases:
-        
+        # Load the model from the pickle file
+        pickle_filename = f'model/saved_models/recommended_food_{disease_index}.pkl'
+        with open(pickle_filename, 'rb') as pickle_file:
+            loaded_model_foodidx = pickle.load(pickle_file)
+
+        # Get top recommended foods
+        recommended_foods = []
+        unique_first_words = set()
+        unique_second_words = set()
+        for idx in loaded_model_foodidx:
+            food_name = food_df.loc[idx, 'Name']
+            if len(food_name.split()) >= 2:
+                first_word, second_word, *_ = food_name.split()
+                if first_word not in unique_first_words and second_word not in unique_second_words:
+                    recommended_foods.append(food_name)
+                    unique_first_words.add(first_word)
+                    unique_second_words.add(second_word)
+            else:
+                recommended_foods.append(food_name)
+
+        return render_template('recommendation.html', diseases=diseases,
+                                                 selected_disease=selected_disease, 
+                                                 recommended_foods=recommended_foods)
 
 
-        if st.button('Recommend'):
-            
-            for disease in selected_diseases:
-                similarity_scores_selected_disease = similarity_scores[disease]
 
-                
-                top_food_indices = np.argsort(similarity_scores_selected_disease)[:top_n_recommend]
-                recommended_foods = food_data.loc[top_food_indices, 'name'].tolist()
+@app.route('/foodavoid', methods=['POST','GET'])
+def avoid():
+    if request.method == 'GET':
+        return render_template('food_avoid.html', diseases=diseases)
+    elif request.method == 'POST':
+        selected_disease = request.form.get('disease')
+        print("Form Data:", request.form)  # Print form data for debugging
+        print("Selected Disease:", selected_disease)  # Print selected disease
+        disease_index = disease_dict.get(selected_disease)
+        if disease_index is None:
+            return "Invalid disease selected."  # Handle case where disease is not found
 
-            
-                avoid_food_indices = np.argsort(similarity_scores_selected_disease)[-top_n_avoid:][::-1]
-                not_recommended_foods = food_data.loc[avoid_food_indices, 'name'].tolist()
+        # Load the model from the pickle file
+        pickle_filename = f'model/saved_models/avoid_food_{disease_index}.pkl'
+        with open(pickle_filename, 'rb') as pickle_file:
+            loaded_model_foodidx = pickle.load(pickle_file)
 
-            
-                col1, col2 = st.columns(2)
+        # Get top avoid foods
+        avoid_foods = []
+        unique_first_words = set()
+        unique_second_words = set()
+        for idx in loaded_model_foodidx:
+            food_name = food_df.loc[idx, 'Name']
+            if len(food_name.split()) >= 2:
+                first_word, second_word, *_ = food_name.split()
+                if first_word not in unique_first_words and second_word not in unique_second_words:
+                    avoid_foods.append(food_name)
+                    unique_first_words.add(first_word)
+                    unique_second_words.add(second_word)
+            else:
+                avoid_foods.append(food_name)
 
-                
-                with col1:
-                    st.subheader(f'Top {top_n_recommend} Recommended Foods for {disease}')
-                    for i, food in enumerate(recommended_foods, start=1):
-                        intensity = int(((top_n_recommend - i + 1) / top_n_recommend) * 255)  
-                        color = f'rgb(0, {255 - intensity*0.8}, 0)'  
-                        st.markdown(f"<div style='background-color: {color}; padding: 10px; margin: 5px; border-radius: 5px; color: #ffffff; text-align: center;'>{i}. {food}</div>", unsafe_allow_html=True)
+        return render_template('avoid.html', diseases=diseases,
+                                                    selected_disease=selected_disease, 
+                                                    avoid_foods=avoid_foods)
 
-                
-                with col2:
-                    st.subheader(f'Top {top_n_avoid} Foods to Avoid for {disease}')
-                    for i, food in enumerate(not_recommended_foods, start=1):
-                        intensity = int(((top_n_avoid - i + 1) / top_n_avoid) * 255)  
-                        color = f'rgb(255, {255 - intensity}, {255 - intensity})' 
-                        st.markdown(f"<div style='background-color: {color}; padding: 10px; margin: 5px; border-radius: 5px; color: #ffffff; text-align: center;'>{i}. {food}</div>", unsafe_allow_html=True)
-        # Add your code for food recommendation here
-@st.cache
-def search(query):
+# Algolia Search
+client = SearchClient.create(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
+index = client.init_index(ALGOLIA_INDEX_NAME)
+
+# Search function
+@app.route('/category')
+def search():
     query = request.args.get('query')
     format = request.args.get('format', 'html')
 
@@ -102,74 +129,14 @@ def search(query):
         if format == 'json':
             return jsonify({'error': 'query parameter is required'})
         else:
-            return render_template('search.html',
-                                   error='query parameter is required')
+            return render_template('search.html', error='query parameter is required')
 
     results = index.search(query)
+    hits = results['hits']
 
+    if format == 'json':
+        return jsonify(hits)
+    return render_template('search.html', hits=hits, query=query)
 
-def display_categorical_food_recommendation():
-    st.title("Categorical Food Recommendation")
-    query = st.text_input('Search for food:', '')
-
-    if st.button('Search'):
-        if not query:
-            st.error('Query parameter is required')
-            return
-
-        results = search(query)
-        hits = results['hits']
-
-        # Extract movie IDs from search results
-        #movie_ids = [hit['Name'] for hit in hits]
-
-        
-
-        # Add poster URLs to the search results
-        for hit, Category in zip(hits, Category):
-            hit['Category'] = Category
-
-        # Display search results
-        st.write("Search Results:")
-        for hit in hits:
-            st.write(hit)
-
-            # Display poster if available
-            if 'Category' in hit:
-                st.image(hit['Category'])
-def display_food_to_avoid():
-    st.title("Food to Avoid")
-    # Add your code for food to avoid here
-
-def display_check_food_for_consumption():
-    st.title("Check Food for Consumption")
-    # Add your code for checking food for consumption here
-
-# Sidebar (Navbar)
-selected_option = st.sidebar.radio("Navigation", ["Food Recommend", "Categorical Food Recommend", "Food to Avoid", "Check Food for Consumption"])
-
-# Main content based on selected option
-if selected_option == "Food Recommend":
-    display_food_recommendation()
-
-elif selected_option == "Categorical Food Recommend":
-    display_categorical_food_recommendation()
-
-elif selected_option == "Food to Avoid":
-    display_food_to_avoid()
-
-elif selected_option == "Check Food for Consumption":
-    display_check_food_for_consumption()
-
-
-
-
-
-
-
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("")
-st.sidebar.markdown("""
-
-""")
+if __name__ == '__main__':
+    app.run(debug=True)

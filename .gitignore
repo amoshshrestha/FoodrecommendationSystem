@@ -1,0 +1,8 @@
+# Environment
+env/
+
+# API
+.env
+
+# Pickle files
+saved_models

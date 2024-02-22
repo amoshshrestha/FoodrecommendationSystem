@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Recommendation</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 50px;
+        }
+        .container {
+            max-width: 600px;
+            height: 900px;
+            margin: 0 auto;
+        }
+        .btn-recommend {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            width: 10rem;
+        }
+        .btn-recommend:hover {
+            background-color: #0056b3;
+            color: #fff;
+        }
+        .food-recommendation-heading {
+            margin-bottom: 35px; /* Adjust as needed */
+        }
+    </style>
+    {% extends 'index.html' %}
+</head>
+{% block body %}
+<body>
+    <div class="container" >
+        <div class="mt-1"></div>
+        <h1 class="text food-recommendation-heading">Food Recommendation</h1>
+        
+        <form action="/recommend" method="post">
+            <div class="form-group">
+                <label for="disease">Choose a Disease:</label>
+                <select class="form-control" name="disease" id="disease">
+                    {% for disease in diseases %}
+                        <option value="{{ disease }}">{{ disease }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-recommend btn-block">Recommend</button>
+        </form>
+        <div class="mt-4">
+            <h4>Recommended Foods</h4>
+            <ul>
+                {% for food in recommended_foods %}
+                    <li>{{ food }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+    </div>
+    <!-- <div class="container">
+        <h1 class="text-center food-recommendation-heading">Recommended Foods for {{ selected_disease }}</h1>
+        
+        <a href="/recommend" class="btn btn-primary">Back to Food Recommendation</a>
+    </div> -->
+    <!-- Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+{% endblock body %}
+</html>
